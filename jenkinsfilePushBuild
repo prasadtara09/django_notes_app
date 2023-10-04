@@ -1,0 +1,64 @@
+pipeline
+{
+    agent
+    {
+        docker 
+        {
+            image 'debian:stable-slim'
+            args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
+        }
+    }
+    
+    stages
+    {
+        stage('Clone')
+        {
+            steps 
+            {
+                echo "Cloning"
+                git url:"https://github.com/prasadtara09/node-todo-cicd.git", branch:"master"
+            }
+        }
+        
+        stage('Install Docker') 
+        {
+            steps 
+            {
+                script 
+                {
+                    // Install Docker
+                    sh 'apt-get update && apt-get install -y docker.io'
+
+                    // Verify Docker installation
+                    sh 'docker --version'
+                }
+            }
+        }
+        stage('Build')
+        {
+            steps
+            {
+                echo "Build"
+                
+                sh "docker build . -t note_app"
+            }
+        }
+        
+        stage('Push')
+        {
+            steps
+            {
+                echo "Pushing"
+                withCredentials([usernamePassword(credentialsId:"dockerhub", passwordVariable:"dockerhubPass", usernameVariable:"dockerhubUser")])
+                {
+                    echo "Logging in"
+                    sh "docker login -u ${env.dockerhubUser} -p ${env.dockerhubPass}"
+                    echo "Tagging the name before pushing"
+                    sh "docker tag note_app ${env.dockerhubUser}/note_app:v${BUILD_NUMBER}"
+                    echo "Pushing the image to repo"
+                    sh "docker push ${env.dockerhubUser}/note_app:v${BUILD_NUMBER}"
+                }
+            }
+        }
+    }
+}
